@@ -31,7 +31,7 @@ Traditional resumes don't always capture a candidate’s true potential. The Ant
 ###  Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/Anti-Resume-Platform.git
+git clone (https://github.com/Bhargavi432-max/Anti-Resume-Platform)
 cd Anti-Resume-Platform
 ```
 
