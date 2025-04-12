@@ -4,6 +4,9 @@ import { Link } from "react-router-dom";
 // Assume useAuth provides authentication status and token
 // import { useAuth } from '../context/AuthContext'; // Example context import
 
+// Use environment variable for API URL if available, otherwise default
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5050"; // Use your server port
+
 function ChallengeListPage() {
   const [challenges, setChallenges] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -25,8 +28,9 @@ function ChallengeListPage() {
       }
 
       try {
-        // Adjust fetch URL to your actual API endpoint
-        const response = await fetch("/api/challenges", {
+        // Adjust fetch URL to your actual API endpoint (prefix with API_URL)
+        const response = await fetch(`${API_URL}/api/challenges`, {
+          // Use API_URL
           method: "GET",
           headers: {
             "Content-Type": "application/json",
@@ -35,8 +39,19 @@ function ChallengeListPage() {
           },
         });
 
+        // Improved error handling for non-OK responses
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+          let errorMsg = `HTTP error! status: ${response.status}`;
+          try {
+            const errData = await response.json();
+            errorMsg = errData.msg || errData.error || errorMsg;
+          } catch (parseError) {
+            // Ignore if response body is not JSON
+            console.info("-------------------------------");
+            console.info("parseError => ", parseError);
+            console.info("-------------------------------");
+          }
+          throw new Error(errorMsg);
         }
 
         const data = await response.json();
@@ -79,9 +94,11 @@ function ChallengeListPage() {
         {challenges.map((challenge) => (
           <div
             key={challenge._id}
-            className="bg-white rounded-lg shadow-md overflow-hidden transform hover:scale-105 transition duration-300 ease-in-out"
+            className="bg-white rounded-lg shadow-md overflow-hidden transform hover:scale-105 transition duration-300 ease-in-out flex flex-col" // Added flex flex-col
           >
-            <div className="p-5">
+            <div className="p-5 flex-grow">
+              {" "}
+              {/* Added flex-grow */}
               <h2 className="text-xl font-semibold mb-2 text-gray-900">
                 {challenge.title}
               </h2>
@@ -89,11 +106,22 @@ function ChallengeListPage() {
                 {challenge.description.substring(0, 100)}
                 {challenge.description.length > 100 ? "..." : ""}
               </p>
-              <div className="mb-4">
-                <span className="inline-block bg-indigo-100 text-indigo-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded">
-                  Type: {challenge.type}
+              {/* --- UPDATED DISPLAY --- */}
+              <div className="mb-4 flex flex-wrap gap-2">
+                {/* Display Category (frontend/backend) */}
+                <span className="inline-block bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded capitalize">
+                  Category: {challenge.type}
+                </span>
+                {/* Display Language Tag (python/java/etc) */}
+                <span className="inline-block bg-indigo-100 text-indigo-800 text-xs font-medium px-2.5 py-0.5 rounded capitalize">
+                  Language: {challenge.languageTag}
                 </span>
               </div>
+              {/* --- END UPDATED DISPLAY --- */}
+            </div>
+            <div className="p-5 border-t border-gray-200">
+              {" "}
+              {/* Footer for button */}
               <Link
                 to={`/challenges/${challenge._id}`} // Link to the detail page
                 className="inline-block w-full text-center px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out"

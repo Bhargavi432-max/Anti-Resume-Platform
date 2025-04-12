@@ -1,15 +1,13 @@
 // src/components/ChallengeDetailPage.jsx
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-// Assume useAuth provides authentication status and token
-// import { useAuth } from '../context/AuthContext'; // Example context import
+import { useParams, useNavigate, Link } from "react-router-dom"; // Added Link, useNavigate
 
-// Define supported languages based on your backend helper
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5050";
 const SUPPORTED_LANGUAGES = ["python", "java", "c", "c++", "javascript"];
 
 function ChallengeDetailPage() {
-  const { challengeId } = useParams(); // Get challengeId from URL
-  const navigate = useNavigate();
+  const { challengeId } = useParams();
+  const navigate = useNavigate(); // Hook for navigation
   const [challenge, setChallenge] = useState(null);
   const [code, setCode] = useState("");
   const [language, setLanguage] = useState("");
@@ -17,13 +15,9 @@ function ChallengeDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
-  // const { token } = useAuth(); // Get token from your auth context/hook
+  const [submitError, setSubmitError] = useState(null);
+  const token = localStorage.getItem("token"); // Placeholder token
 
-  // Placeholder for token - replace with your actual auth logic
-  const token = localStorage.getItem("token"); // Example: reading from localStorage
-
-  // Fetch *all* challenges and filter (since backend doesn't have /challenges/:id)
-  // Ideally, backend would provide a specific endpoint GET /api/challenges/:id
   useEffect(() => {
     const fetchChallengeData = async () => {
       setIsLoading(true);
@@ -33,27 +27,30 @@ function ChallengeDetailPage() {
         setIsLoading(false);
         return;
       }
-
       try {
-        const response = await fetch("/api/challenges", {
-          // Fetching all
+        const response = await fetch(`${API_URL}/api/challenges`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
         });
-        if (!response.ok) throw new Error("Failed to fetch challenges");
+        if (!response.ok) {
+          let errorMsg = `HTTP error! status: ${response.status}`;
+          try {
+            const errData = await response.json();
+            errorMsg = errData.msg || errData.error || errorMsg;
+          } catch (e) {}
+          throw new Error(errorMsg);
+        }
         const allChallenges = await response.json();
         const foundChallenge = allChallenges.find(
           (ch) => ch._id === challengeId
         );
-
         if (foundChallenge) {
           setChallenge(foundChallenge);
-          // Initialize code editor with boilerplate and set default language
           setCode(foundChallenge.boilerplateCode || "");
-          setLanguage(foundChallenge.type || SUPPORTED_LANGUAGES[0]); // Default to type or first lang
+          setLanguage(foundChallenge.languageTag || SUPPORTED_LANGUAGES[0]);
         } else {
           setError("Challenge not found.");
         }
@@ -64,21 +61,17 @@ function ChallengeDetailPage() {
         setIsLoading(false);
       }
     };
-
     fetchChallengeData();
   }, [challengeId, token]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!challenge || isSubmitting || !token) return;
-
     setIsSubmitting(true);
-    setSubmissionResult(null); // Clear previous result
-    setError(null);
-
+    setSubmissionResult(null);
+    setSubmitError(null);
     try {
-      // Adjust fetch URL to your actual API endpoint
-      const response = await fetch("/api/challenges/submit", {
+      const response = await fetch(`${API_URL}/api/challenges/submit`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -90,23 +83,32 @@ function ChallengeDetailPage() {
           language: language,
         }),
       });
-
       const result = await response.json();
-
       if (!response.ok) {
-        throw new Error(result.msg || `HTTP error! status: ${response.status}`);
+        throw new Error(
+          result.msg ||
+            result.error ||
+            `Submission failed! Status: ${response.status}`
+        );
       }
-
-      // Display success message from backend
       setSubmissionResult({
-        status: result.status, // e.g., "Accepted", "Wrong Answer"
+        status: result.status,
         score: result.score,
-        message: result.msg, // e.g., "Submission evaluated"
+        message: result.msg,
       });
+
+      // --- ADDED: Navigate back after a short delay on success ---
+      if (result.status === "Accepted") {
+        // Or check response.ok
+        setTimeout(() => {
+          navigate("/challenges"); // Navigate back to the challenges list
+        }, 2500); // Increased delay slightly
+      }
+      // --- End Added Logic ---
     } catch (err) {
       console.error("Error submitting challenge:", err);
-      setError(err.message || "Failed to submit solution. Please try again.");
-      setSubmissionResult(null); // Clear result on error
+      setSubmitError(err.message || "Failed to submit solution.");
+      setSubmissionResult(null);
     } finally {
       setIsSubmitting(false);
     }
@@ -115,44 +117,50 @@ function ChallengeDetailPage() {
   if (isLoading) {
     return <div className="text-center p-10">Loading challenge details...</div>;
   }
-
   if (error && !challenge) {
-    // Show error only if challenge couldn't load
     return <div className="text-center p-10 text-red-600">Error: {error}</div>;
   }
-
   if (!challenge) {
-    return <div className="text-center p-10">Challenge not found.</div>; // Should be caught by error state mostly
+    return <div className="text-center p-10">Challenge not found.</div>;
   }
 
-  // Determine result styling
   let resultColor = "text-gray-700";
   if (submissionResult?.status === "Accepted") {
     resultColor = "text-green-600";
   } else if (submissionResult?.status) {
-    // Any other non-null status (Wrong Answer, etc.)
     resultColor = "text-red-600";
   }
 
   return (
     <div className="container mx-auto p-4 sm:p-6 lg:p-8">
-      <button
-        onClick={() => navigate("/challenges")}
-        className="mb-4 text-indigo-600 hover:underline"
+      <Link
+        to="/challenges"
+        className="mb-4 inline-block text-indigo-600 hover:underline"
       >
         &larr; Back to Challenges
-      </button>
+      </Link>
       <div className="bg-white p-6 rounded-lg shadow-md mb-6">
         <h1 className="text-2xl font-bold mb-2 text-gray-900">
           {challenge.title}
         </h1>
-        <p className="text-gray-700 mb-4">{challenge.description}</p>
+        <div className="mb-3 flex flex-wrap gap-2">
+          <span className="inline-block bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded capitalize">
+            Category: {challenge.type}
+          </span>
+          <span className="inline-block bg-indigo-100 text-indigo-800 text-xs font-medium px-2.5 py-0.5 rounded capitalize">
+            Language: {challenge.languageTag}
+          </span>
+        </div>
+        <p className="text-gray-700 mb-4 whitespace-pre-line">
+          {challenge.description}
+        </p>{" "}
+        {/* Use whitespace-pre-line */}
         {challenge.input && (
           <div className="mb-2">
             <h3 className="font-semibold text-sm text-gray-600">
               Input Example:
             </h3>
-            <pre className="bg-gray-100 p-2 rounded text-xs text-gray-800">
+            <pre className="bg-gray-100 p-2 rounded text-xs text-gray-800 whitespace-pre-wrap break-words">
               {challenge.input}
             </pre>
           </div>
@@ -162,13 +170,12 @@ function ChallengeDetailPage() {
             <h3 className="font-semibold text-sm text-gray-600">
               Expected Output:
             </h3>
-            <pre className="bg-gray-100 p-2 rounded text-xs text-gray-800">
+            <pre className="bg-gray-100 p-2 rounded text-xs text-gray-800 whitespace-pre-wrap break-words">
               {challenge.expectedOutput}
             </pre>
           </div>
         )}
       </div>
-
       <form
         onSubmit={handleSubmit}
         className="bg-white p-6 rounded-lg shadow-md"
@@ -189,13 +196,12 @@ function ChallengeDetailPage() {
           >
             {SUPPORTED_LANGUAGES.map((lang) => (
               <option key={lang} value={lang}>
+                {" "}
                 {lang.charAt(0).toUpperCase() + lang.slice(1)}{" "}
-                {/* Capitalize */}
               </option>
             ))}
           </select>
         </div>
-
         <div className="mb-4">
           <label
             htmlFor="code"
@@ -203,7 +209,6 @@ function ChallengeDetailPage() {
           >
             Your Code
           </label>
-          {/* Basic Textarea - Replace with Code Editor component for better UX if desired */}
           <textarea
             id="code"
             value={code}
@@ -212,23 +217,20 @@ function ChallengeDetailPage() {
             required
             className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
             placeholder="Write your code here..."
-          />
+          ></textarea>
         </div>
-
-        {/* Display Submission Error */}
-        {error && (
-          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
-            {error}
+        {submitError && (
+          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded text-sm">
+            {" "}
+            {submitError}{" "}
           </div>
         )}
-
-        {/* Display Submission Result */}
         {submissionResult && (
           <div
-            className={`mb-4 p-3 rounded ${
+            className={`mb-4 p-3 rounded text-sm ${
               submissionResult.status === "Accepted"
                 ? "bg-green-100"
-                : "bg-yellow-100"
+                : "bg-red-100"
             } ${resultColor}`}
           >
             <p>
@@ -238,23 +240,33 @@ function ChallengeDetailPage() {
               <strong>Score:</strong> {submissionResult.score}
             </p>
             {submissionResult.message && (
-              <p className="text-sm">{submissionResult.message}</p>
+              <p className="text-sm opacity-80">{submissionResult.message}</p>
+            )}
+            {/* ADDED: Message about redirecting */}
+            {submissionResult.status === "Accepted" && (
+              <p className="mt-1 text-xs">
+                Redirecting back to challenges list...
+              </p>
             )}
           </div>
         )}
-
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || submissionResult?.status === "Accepted"}
           className={`w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition duration-150 ease-in-out ${
-            isSubmitting ? "opacity-50 cursor-not-allowed" : ""
+            isSubmitting || submissionResult?.status === "Accepted"
+              ? "opacity-50 cursor-not-allowed"
+              : ""
           }`}
         >
-          {isSubmitting ? "Submitting..." : "Submit Solution"}
+          {isSubmitting
+            ? "Submitting..."
+            : submissionResult?.status === "Accepted"
+            ? "Submitted Successfully"
+            : "Submit Solution"}
         </button>
       </form>
     </div>
   );
 }
-
 export default ChallengeDetailPage;
