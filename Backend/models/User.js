@@ -5,9 +5,9 @@ const userSchema = new mongoose.Schema({
   email: { type: String, unique: true },
   password: { type: String, required: true },
   role: { type: String, enum: ['candidate', 'company'], required: true },
-  score: {
-    type: Number,
-    default: 0,
+  skills: {
+    type: [String], 
+    default: [],
   },
 });
 
